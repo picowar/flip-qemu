@@ -1,0 +1,5 @@
+# pc, register, mask, which iteration
+000f2f12,           EAX,    1234567890abcdef,   2
+0x00dead00000beef2, EBX,    0x12345678deadbeef, 1
+0x00dead0deadbabe,  RIP,    0x1,                1 
+0x00dead0babedead,  EFLAGS, 0x1,                5

@@ -25,6 +25,8 @@
 #include "exec/cpu_ldst.h"
 #include "exec/address-spaces.h"
 
+#include "qemu.h"
+
 void helper_outb(CPUX86State *env, uint32_t port, uint32_t data)
 {
 #ifdef CONFIG_USER_ONLY
@@ -645,3 +647,78 @@ void helper_wrpkru(CPUX86State *env, uint32_t ecx, uint64_t val)
     env->pkru = val;
     tlb_flush(cs);
 }
+
+int time_to_bitflip(int i);
+int time_to_bitflip(int i){
+    if (bitflips[i].itrCounter == bitflips[i].itr)
+        return 0;
+
+    bitflips[i].itrCounter++;
+
+    if (bitflips[i].itrCounter == bitflips[i].itr)
+        return 1; 
+    else
+        return 0;
+}
+
+void helper_bitflip(CPUX86State *env, int flipIndex)
+{
+    if (time_to_bitflip(flipIndex)) {
+        int reg = bitflips[flipIndex].reg;
+        uint64_t old_val = env->regs[reg];
+        env->regs[reg] ^= bitflips[flipIndex].mask;
+
+        qemu_log("Bitflip: %d flipped from %" PRIx64 " to %" PRIx64
+                 ", using mask: %" PRIx64 "\n", reg, old_val, env->regs[reg], bitflips[flipIndex].mask);
+    }
+}
+
+void helper_bitflip_eip(CPUX86State *env, int flipIndex){
+    if (time_to_bitflip(flipIndex)) {
+        uint64_t old_val = env->eip;
+        env->eip ^= bitflips[flipIndex].mask;
+
+        qemu_log("Bitflip: EIP/RIP flipped from %" PRIx64 " to %" PRIx64
+                 ", using mask: %" PRIx64 "\n", old_val, env->eip, bitflips[flipIndex].mask);
+    }
+}
+
+void helper_bitflip_eflags(CPUX86State *env, int flipIndex){
+    if (time_to_bitflip(flipIndex)) {
+        uint64_t old_val = env->eflags;
+        env->eflags ^= bitflips[flipIndex].mask;
+
+        qemu_log("Bitflip: EFLAGS flipped from %" PRIx64 " to %" PRIx64
+                 ", using mask: %" PRIx64 "\n", old_val, env->eflags, bitflips[flipIndex].mask);
+    }
+}
+
+void helper_bitflip_mem(CPUX86State *env, int flipIndex){
+    // Memory functions described in include/exec/cpu_ldst.h and include/exec/memory.h
+    // Also, check functions: tlb_vaddr_to_host, tlb_protect_code, memory_region_from_host, tb_invalidate_phys_page
+    if (time_to_bitflip(flipIndex)) {
+        uint64_t ptr = bitflips[flipIndex].mem_ptr;
+
+        // If the page is marked read only, we need to mark it writable 
+        size_t pagesize = sysconf(_SC_PAGESIZE);
+        // Compute the start of the page pointed to by ptr
+        void* target_page = (void*)((uintptr_t) g2h(ptr) & ~(pagesize - 1));
+
+        // Mark the page as writable
+        if (mprotect(target_page, pagesize, PROT_READ | PROT_WRITE ))
+             perror("mprotect failed");
+
+        // Read old value from memory,
+        // do xor with the mask, and
+        // store the new value
+        uint8_t old_val = cpu_ldub_data(env, ptr);
+        uint8_t new_val = old_val ^ bitflips[flipIndex].mask;
+        cpu_stb_data(env, ptr, new_val);
+
+	// Flush the translation cache
+        tb_flush(env_cpu(env));
+
+        qemu_log("Bitflip: Value at memory address %lx flipped from %02x to %02x"
+                 ", using mask: %lx\n", ptr, old_val, new_val, bitflips[flipIndex].mask);
+    }
+}    

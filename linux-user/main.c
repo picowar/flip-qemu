@@ -392,6 +392,134 @@ static void handle_arg_trace(const char *arg)
     trace_file = trace_opt_parse(arg);
 }
 
+struct bitflip* bitflips;
+int bitflips_size;
+
+static void handle_arg_bitflips(const char* arg){
+    int numLines = 0, currentIndex = 0, ret;
+    char ch, line[200], regbuf[7];
+    FILE* bitflipsfile = fopen(arg, "r");
+    if (!bitflipsfile){
+        fprintf(stderr, "Couldn't open file '%s'\n", arg);
+        exit(EXIT_FAILURE);
+    }
+
+    // Count number of lines in the file
+    while (EOF != (ch = fgetc(bitflipsfile)))
+        if (ch == '\n')
+            numLines++;
+
+    // Allocate shared memory to store the bitflips structs
+    bitflips = mmap(NULL, sizeof(struct bitflip) * (numLines + 1), 
+                    PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    if (!bitflips){
+        fprintf(stderr, "Memory alloc failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    rewind(bitflipsfile);
+    
+    // Read one line at a time from the file into 'line' variable,
+    // populate an array with bitflip structs
+    while (fgets(line, sizeof(line), bitflipsfile) != NULL) {
+        // ignore empty lines and comments
+        if (line[0] == '\n' || line[0] == '#') continue;
+        
+        struct bitflip* bitflipStruct = &bitflips[currentIndex];
+
+        // Is it a bitflip in memory?
+        if (line[0] == 'M'){
+            bitflipStruct->type = MEM;
+            ret = sscanf (line, "M, %lx, %lx, %lx, %d",
+                &bitflipStruct->pc, &bitflipStruct->mem_ptr, 
+                &bitflipStruct->mask, &bitflipStruct->itr);
+
+            if (ret != 4){
+                printf ("Line '%s' didn't scan properly\n", line);
+                continue;
+            }
+            currentIndex++;
+            continue;
+
+        }
+
+        // Otherwise it is a bitflip in a register
+        bitflipStruct->type = REG;
+        ret = sscanf (line, "%lx, %6[^,], %lx, %d",
+            &bitflipStruct->pc, regbuf, 
+            &bitflipStruct->mask, &bitflipStruct->itr);
+
+        if (ret != 4){
+            printf ("Line '%s' didn't scan properly\n", line);
+            continue;
+        }
+
+        if       (!strcmp("EAX", regbuf) || !strcmp("RAX", regbuf)){
+            bitflipStruct->reg = 0;
+        } else if(!strcmp("ECX", regbuf) || !strcmp("RCX", regbuf)) {
+            bitflipStruct->reg = 1;
+        } else if(!strcmp("EDX", regbuf) || !strcmp("RDX", regbuf)) {
+            bitflipStruct->reg = 2;
+        } else if(!strcmp("EBX", regbuf) || !strcmp("RBX", regbuf)) {
+            bitflipStruct->reg = 3;
+        } else if(!strcmp("ESP", regbuf) || !strcmp("RSP", regbuf)) {
+            bitflipStruct->reg = 4;
+        } else if(!strcmp("EBP", regbuf) || !strcmp("RBP", regbuf)) {
+            bitflipStruct->reg = 5;
+        } else if(!strcmp("ESI", regbuf) || !strcmp("RSI", regbuf)) {
+            bitflipStruct->reg = 6;
+        } else if(!strcmp("EDI", regbuf) || !strcmp("RDI", regbuf)) {
+            bitflipStruct->reg = 7;
+        } else if(!strcmp("R8", regbuf)) {
+            bitflipStruct->reg = 8;
+        } else if(!strcmp("R9", regbuf)) {
+            bitflipStruct->reg = 9;
+        } else if(!strcmp("R10", regbuf)) {
+            bitflipStruct->reg = 10;
+        } else if(!strcmp("R11", regbuf)) {
+            bitflipStruct->reg = 11;
+        } else if(!strcmp("R12", regbuf)) {
+            bitflipStruct->reg = 12;
+        } else if(!strcmp("R13", regbuf)) {
+            bitflipStruct->reg = 13;
+        } else if(!strcmp("R14", regbuf)) {
+            bitflipStruct->reg = 14;
+        } else if(!strcmp("R15", regbuf)) {
+            bitflipStruct->reg = 15;
+        } else if(!strcmp("EIP", regbuf) || !strcmp("RIP", regbuf)) {
+            bitflipStruct->reg = -1;
+            bitflipStruct->type = RIP;
+        } else if(!strcmp("EFLAGS", regbuf)) {
+            bitflipStruct->reg = -2;
+            bitflipStruct->type = EFLAGS;
+        } else {
+            printf("Unsupported register: %s\n", regbuf);
+            continue;
+        }   
+        currentIndex++;
+    }
+    // Global variable to store number of strucs in bitflips array
+    bitflips_size = currentIndex;
+    
+    fclose(bitflipsfile);
+    
+    printf("Read following %d bitflip(s):\n", currentIndex);
+    for (int i = 0; i != bitflips_size; i++){
+        printf("Bitflip %d:\n"
+                "  pc  = %lx,\n",
+          i, bitflips[i].pc);
+   
+        if (bitflips[i].type == MEM)
+            printf("  mem_ptr = %lx,\n", bitflips[i].mem_ptr);
+        else
+            printf("  reg = %d,\n", bitflips[i].reg);
+
+        printf("  mask = %lx,\n"
+                "  itr = %d.\n", bitflips[i].mask, bitflips[i].itr);
+    }
+
+}
+
 #if defined(TARGET_XTENSA)
 static void handle_arg_abi_call0(const char *arg)
 {
@@ -457,6 +585,8 @@ static const struct qemu_argument arg_table[] = {
      "",           "log system calls"},
     {"seed",       "QEMU_RAND_SEED",   true,  handle_arg_seed,
      "",           "Seed for pseudo-random number generator"},
+    {"bitflips",   "",                 true,  handle_arg_bitflips,
+     "",           "Specify bitflips"},
     {"trace",      "QEMU_TRACE",       true,  handle_arg_trace,
      "",           "[[enable=]<pattern>][,events=<file>][,file=<file>]"},
 #ifdef CONFIG_PLUGIN

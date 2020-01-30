@@ -9,6 +9,7 @@
 
 #include "qemu/osdep.h"
 #include "qemu/error-report.h"
+#include "qemu.h"
 #include "cpu.h"
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
@@ -97,8 +98,63 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
             && (tb_cflags(db->tb) & CF_LAST_IO)) {
             /* Accept I/O on the last instruction.  */
             gen_io_start();
+
+            // Insert a bitflip _before_ the target instruction
+            for(int i = 0; i < bitflips_size; i++){
+                if (db->pc_next == bitflips[i].pc){
+                    TCGv_i32 bitflipIndex = tcg_const_i32(i);
+
+                    switch (bitflips[i].type){
+                    case REG:
+                        gen_helper_bitflip(cpu_env, bitflipIndex);
+                        break;
+
+                    case RIP:
+                        gen_helper_bitflip_eip(cpu_env, bitflipIndex);
+                        break;
+
+                    case EFLAGS:
+                        gen_helper_bitflip_eflags(cpu_env, bitflipIndex);
+                        break;
+
+                    case MEM:
+                        gen_helper_bitflip_mem(cpu_env, bitflipIndex);
+                        break;
+                    }
+                    tcg_temp_free_i32(bitflipIndex);
+                }
+            }
+
+
             ops->translate_insn(db, cpu);
         } else {
+
+            // Insert a bitflip _before_ the target instruction
+            for(int i = 0; i < bitflips_size; i++){
+                if (db->pc_next == bitflips[i].pc){
+                    TCGv_i32 bitflipIndex = tcg_const_i32(i);
+
+                    switch (bitflips[i].type){
+                    case REG:
+                        gen_helper_bitflip(cpu_env, bitflipIndex);
+                        break;
+
+                    case RIP:
+                        gen_helper_bitflip_eip(cpu_env, bitflipIndex);
+                        break;
+
+                    case EFLAGS:
+                        gen_helper_bitflip_eflags(cpu_env, bitflipIndex);
+                        break;
+
+                    case MEM:
+                        gen_helper_bitflip_mem(cpu_env, bitflipIndex);
+                        break;
+                    }
+                    tcg_temp_free_i32(bitflipIndex);
+                }
+            }
+
             ops->translate_insn(db, cpu);
         }
 

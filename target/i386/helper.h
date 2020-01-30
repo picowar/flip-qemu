@@ -228,3 +228,7 @@ DEF_HELPER_3(rcrq, tl, env, tl, tl)
 #endif
 
 DEF_HELPER_1(rdrand, tl, env)
+DEF_HELPER_2(bitflip, void, env, int)
+DEF_HELPER_2(bitflip_eip, void, env, int)
+DEF_HELPER_2(bitflip_eflags, void, env, int)
+DEF_HELPER_2(bitflip_mem, void, env, int)

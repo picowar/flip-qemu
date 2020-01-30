@@ -11,6 +11,7 @@
  * See the COPYING file in the top-level directory.
  */
 
+#include <sys/sysmacros.h>
 #include "qemu/osdep.h"
 #include <sys/ioctl.h>
 #include <sys/utsname.h>

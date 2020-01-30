@@ -5,6 +5,7 @@
 #include "cpu.h"
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
+#include "bitflip.h"
 
 #undef DEBUG_REMAP
 #ifdef DEBUG_REMAP
