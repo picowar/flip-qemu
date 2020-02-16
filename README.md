@@ -3,9 +3,10 @@
 Testing utility to cause determinstic and composable bit flips in CPU registers, flags, memory and binaries.
 
 A bitflip is represented by the tuple: **< *pc*, *L*, *M*, *i* >**
-***pc***: Program counter @ which flip is to be triggered
-***L***: target register, or memory address
-***M***: mask to xor *L* with, allows flipping multiple bits
+
+***pc***: Program counter @ which flip is to be triggered</br>
+***L***: target register, or memory address</br>
+***M***: mask to xor *L* with, allows flipping multiple bits</br>
 ***i***: Iteration number at which PC hits that value (helps prevent FLIP from triggering flip each time the virtual CPU hits that PC value)
 
 ## Building
